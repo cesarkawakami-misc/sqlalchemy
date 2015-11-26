@@ -3907,8 +3907,8 @@ class SessionBindTest(QueryTest):
         User = self.classes.User
         session = Session()
 
-        # Do an update using unordered dict and check that the parametes used
-        # are unordered
+        # Do an update using unordered dict and check that the parameters used
+        # are ordered in table order
         with self._assert_bind_args(session) as mock_args:
             session.query(User).filter(User.id == 15).update(
                 {'name': 'foob', 'id': 123})
@@ -3920,34 +3920,38 @@ class SessionBindTest(QueryTest):
         User = self.classes.User
         session = Session()
 
-        # Do an update using an ordered dict and check that the parametes used
-        # are unordered
+        # Do an update using ordered dict and check that the parameters used
+        # are ordered in table order
         with self._assert_bind_args(session) as mock_args:
             session.query(User).filter(User.id == 15).update(
                 util.OrderedDict((('name', 'foob'), ('id', 123))))
             params_type = type(mock_args.mock_calls[0][2]['clause'].parameters)
             assert params_type is dict
 
-    def test_bulk_update_with_order(self):
+    def test_bulk_update_preserve_parameter_order(self):
         User = self.classes.User
         session = Session()
 
         # Do update using a tuple and check that order is preserved
         with self._assert_bind_args(session) as mock_args:
             session.query(User).filter(User.id == 15).update(
-                (('id', 123), ('name', 'foob')))
-            cols = [c[0].name for c
-                    in mock_args.mock_calls[0][2]['clause'].parameters]
-            assert ['id', 'name'] == cols
+                (('id', 123), ('name', 'foob')),
+                update_args={"preserve_parameter_order": True})
+            cols = [c.key
+                    for c in mock_args.mock_calls[0][2]
+                    ['clause']._parameter_ordering]
+            eq_(['id', 'name'], cols)
 
         # Now invert the order and use a list instead, and check that order is
         # also preserved
         with self._assert_bind_args(session) as mock_args:
             session.query(User).filter(User.id == 15).update(
-                [('id', 123), ('name', 'foob')])
-            cols = [c[0].name for c
-                    in mock_args.mock_calls[0][2]['clause'].parameters]
-            assert ['id', 'name'] == cols
+                [('id', 123), ('name', 'foob')],
+                update_args={"preserve_parameter_order": True})
+            cols = [c.key
+                    for c in mock_args.mock_calls[0][2]
+                    ['clause']._parameter_ordering]
+            eq_(['id', 'name'], cols)
 
     def test_bulk_delete_no_sync(self):
         User = self.classes.User

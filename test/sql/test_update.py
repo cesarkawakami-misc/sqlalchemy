@@ -183,36 +183,15 @@ class UpdateTest(_UpdateFromTestBase, fixtures.TablesTest, AssertsCompiledSQL):
             'mytable.myid = hoho(:hoho_1) AND '
             'mytable.name = :param_2 || mytable.name || :param_3')
 
-    def test_update_12(self):
-        table1 = self.tables.mytable
-
-        # Confirm that we can pass values as tuple value pairs
-        values = (
-            (table1.c.myid, func.do_stuff(table1.c.myid, literal('hoho'))),
-            (table1.c.name, table1.c.name + 'lala'))
-        self.assert_compile(
-            update(
-                table1,
-                (table1.c.myid == func.hoho(4)) & (
-                    table1.c.name == literal('foo') +
-                    table1.c.name +
-                    literal('lala')),
-                values=values),
-            'UPDATE mytable '
-            'SET '
-            'myid=do_stuff(mytable.myid, :param_1), '
-            'name=(mytable.name || :name_1) '
-            'WHERE '
-            'mytable.myid = hoho(:hoho_1) AND '
-            'mytable.name = :param_2 || mytable.name || :param_3')
-
-    def test_update_13(self):
+    def test_update_ordered_parameters_1(self):
         table1 = self.tables.mytable
 
         # Confirm that we can pass values as list value pairs
+        # note these are ordered *differently* from table.c
         values = [
+            (table1.c.name, table1.c.name + 'lala'),
             (table1.c.myid, func.do_stuff(table1.c.myid, literal('hoho'))),
-            (table1.c.name, table1.c.name + 'lala')]
+        ]
         self.assert_compile(
             update(
                 table1,
@@ -220,19 +199,58 @@ class UpdateTest(_UpdateFromTestBase, fixtures.TablesTest, AssertsCompiledSQL):
                     table1.c.name == literal('foo') +
                     table1.c.name +
                     literal('lala')),
+                preserve_parameter_order=True,
                 values=values),
             'UPDATE mytable '
             'SET '
-            'myid=do_stuff(mytable.myid, :param_1), '
-            'name=(mytable.name || :name_1) '
+            'name=(mytable.name || :name_1), '
+            'myid=do_stuff(mytable.myid, :param_1) '
             'WHERE '
             'mytable.myid = hoho(:hoho_1) AND '
             'mytable.name = :param_2 || mytable.name || :param_3')
 
-    def test_update_14(self):
+    def test_update_ordered_parameters_2(self):
         table1 = self.tables.mytable
 
-        # Confirm that ordered dicts are treated as normal dicts
+        # Confirm that we can pass values as list value pairs
+        # note these are ordered *differently* from table.c
+        values = [
+            (table1.c.name, table1.c.name + 'lala'),
+            ('description', 'some desc'),
+            (table1.c.myid, func.do_stuff(table1.c.myid, literal('hoho')))
+        ]
+        self.assert_compile(
+            update(
+                table1,
+                (table1.c.myid == func.hoho(4)) & (
+                    table1.c.name == literal('foo') +
+                    table1.c.name +
+                    literal('lala')),
+                preserve_parameter_order=True).values(values),
+            'UPDATE mytable '
+            'SET '
+            'name=(mytable.name || :name_1), '
+            'description=:description, '
+            'myid=do_stuff(mytable.myid, :param_1) '
+            'WHERE '
+            'mytable.myid = hoho(:hoho_1) AND '
+            'mytable.name = :param_2 || mytable.name || :param_3')
+
+    def test_update_preserve_order_reqs_listtups(self):
+        table1 = self.tables.mytable
+        testing.assert_raises_message(
+            ValueError,
+            "When preserve_parameter_order is True, values\(\) "
+            "only accepts a list of 2-tuples",
+            table1.update(preserve_parameter_order=True).values,
+            {"description": "foo", "name": "bar"}
+        )
+
+    def test_update_ordereddict(self):
+        table1 = self.tables.mytable
+
+        # Confirm that ordered dicts are treated as normal dicts,
+        # columns sorted in table order
         values = util.OrderedDict((
             (table1.c.name, table1.c.name + 'lala'),
             (table1.c.myid, func.do_stuff(table1.c.myid, literal('hoho')))))

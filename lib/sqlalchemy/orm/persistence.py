@@ -1258,12 +1258,15 @@ class BulkUpdate(BulkUD):
                 "Invalid expression type: %r" % key)
 
     def _do_exec(self):
-        if isinstance(self.values, (list, tuple)):
-            values = tuple((self._resolve_string_to_expr(k), v)
-                           for k, v in self.values)
-        else:
-            values = dict((self._resolve_string_to_expr(k), v)
-                          for k, v in self.values.items())
+
+        values = [
+            (self._resolve_string_to_expr(k), v)
+            for k, v in (
+                self.values.items() if hasattr(self.values, 'items')
+                else self.values)
+        ]
+        if not self.update_kwargs.get('preserve_parameter_order', False):
+            values = dict(values)
 
         update_stmt = sql.update(self.primary_table,
                                  self.context.whereclause, values,
